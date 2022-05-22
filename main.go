@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -60,6 +61,7 @@ func main() {
 
 // helloRunHandler responds to requests by rendering an HTML page.
 func helloRunHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
 	if err := tmpl.Execute(w, data); err != nil {
 		msg := http.StatusText(http.StatusInternalServerError)
 		log.Printf("template.Execute: %v", err)
