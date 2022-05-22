@@ -42,6 +42,8 @@ func main() {
 	// Define HTTP server.
 	http.HandleFunc("/", helloRunHandler)
 
+	http.HandleFunc("/test", testRunHandler)
+
 	fs := http.FileServer(http.Dir("./assets"))
 	http.Handle("/assets/", http.StripPrefix("/assets/", fs))
 
@@ -61,10 +63,13 @@ func main() {
 
 // helloRunHandler responds to requests by rendering an HTML page.
 func helloRunHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
 	if err := tmpl.Execute(w, data); err != nil {
 		msg := http.StatusText(http.StatusInternalServerError)
 		log.Printf("template.Execute: %v", err)
 		http.Error(w, msg, http.StatusInternalServerError)
 	}
+}
+
+func testRunHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
 }
