@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -19,6 +21,17 @@ var (
 	data templateData
 	tmpl *template.Template
 )
+
+type User struct {
+	Firstname string `json:"firstname"`
+	Lastname  string `json:"lastname"`
+	Age       int    `json:"age"`
+}
+
+type Post struct {
+	Id    int    `json:"id"`
+	Title string `json:"title"`
+}
 
 func main() {
 	// Initialize template parameters.
@@ -39,10 +52,45 @@ func main() {
 		Revision: revision,
 	}
 
+	// posts.json を読み込む
+	postsJsonFile, error := os.Open("./assets/posts.json")
+
+	// posts.json の読み込みに失敗した場合
+	if error != nil {
+		log.Fatal(error)
+	}
+
+	// defer で postsJsonFile を閉じる
+	defer postsJsonFile.Close()
+
+	// postsJsonFile を読み込みパースする
+	postsByteValue, _ := ioutil.ReadAll(postsJsonFile)
+	var posts []Post
+	json.Unmarshal(postsByteValue, &posts)
+
+	fmt.Println(posts) // [{132 Ditto} {133 Eevee} {143 Snorlax}]
+
 	// Define HTTP server.
 	http.HandleFunc("/", helloRunHandler)
 
 	http.HandleFunc("/test", testRunHandler)
+
+	http.HandleFunc("/decode", func(w http.ResponseWriter, r *http.Request) {
+		var user User
+		json.NewDecoder(r.Body).Decode(&user)
+
+		fmt.Fprintf(w, "%s %s is %d years old!", user.Firstname, user.Lastname, user.Age)
+	})
+
+	http.HandleFunc("/encode", func(w http.ResponseWriter, r *http.Request) {
+		// peter := User{
+		// 	Firstname: "John",
+		// 	Lastname:  "Doe",
+		// 	Age:       25,
+		// }
+
+		json.NewEncoder(w).Encode(posts)
+	})
 
 	fs := http.FileServer(http.Dir("./assets"))
 	http.Handle("/assets/", http.StripPrefix("/assets/", fs))
