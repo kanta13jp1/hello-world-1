@@ -36,18 +36,6 @@ type Post struct {
 }
 
 func main() {
-	r := mux.NewRouter()
-
-	r.HandleFunc("/books/{title}/page/{page}", func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		title := vars["title"]
-		page := vars["page"]
-
-		fmt.Fprintf(w, "You've requested the book: %s on page %s\n", title, page)
-	})
-
-	http.ListenAndServe(":80", r)
-
 	// Initialize template parameters.
 	service := os.Getenv("K_SERVICE")
 	if service == "" {
@@ -85,18 +73,20 @@ func main() {
 	fmt.Println(posts) // [{132 Ditto} {133 Eevee} {143 Snorlax}]
 
 	// Define HTTP server.
-	http.HandleFunc("/", helloRunHandler)
+	r := mux.NewRouter()
 
-	http.HandleFunc("/test", testRunHandler)
+	r.HandleFunc("/", helloRunHandler)
 
-	http.HandleFunc("/decode", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/test", testRunHandler)
+
+	r.HandleFunc("/decode", func(w http.ResponseWriter, r *http.Request) {
 		var user User
 		json.NewDecoder(r.Body).Decode(&user)
 
 		fmt.Fprintf(w, "%s %s is %d years old!", user.Firstname, user.Lastname, user.Age)
 	})
 
-	http.HandleFunc("/encode", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/encode", func(w http.ResponseWriter, r *http.Request) {
 		// peter := User{
 		// 	Firstname: "John",
 		// 	Lastname:  "Doe",
@@ -106,14 +96,27 @@ func main() {
 		json.NewEncoder(w).Encode(posts)
 	})
 
-	fs := http.FileServer(http.Dir("./assets"))
-	http.Handle("/assets/", http.StripPrefix("/assets/", fs))
+	// fs := http.FileServer(http.Dir("./assets"))
+	// r.Handle("/assets/", http.StripPrefix("/assets/", fs))
+	// r.PathPrefix("/").Handler(http.FileServer(http.Dir("./assets/")))
+	s := http.StripPrefix("/assets/", http.FileServer(http.Dir("./assets/")))
+	r.PathPrefix("/assets/").Handler(s)
 
 	// PORT environment variable is provided by Cloud Run.
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
+
+	r.HandleFunc("/books/{title}/page/{page}", func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		title := vars["title"]
+		page := vars["page"]
+
+		fmt.Fprintf(w, "You've requested the book: %s on page %s\n", title, page)
+	})
+
+	http.Handle("/", r)
 
 	log.Print("Hello from Cloud Run! The container started successfully and is listening for HTTP requests on $PORT")
 	log.Printf("Listening on port %s", port)
