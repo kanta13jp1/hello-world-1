@@ -79,6 +79,10 @@ func main() {
 
 	r.HandleFunc("/test", testRunHandler)
 
+	// Restrict the request handler to http/https.
+	r.HandleFunc("/secure", SecureHandler).Schemes("https")
+	r.HandleFunc("/insecure", InsecureHandler).Schemes("http")
+
 	r.HandleFunc("/decode", func(w http.ResponseWriter, r *http.Request) {
 		var user User
 		json.NewDecoder(r.Body).Decode(&user)
@@ -137,4 +141,12 @@ func helloRunHandler(w http.ResponseWriter, r *http.Request) {
 
 func testRunHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
+}
+
+func SecureHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "SecureHandler, you've requested: %s\n", r.URL.Path)
+}
+
+func InsecureHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "InsecureHandler, you've requested: %s\n", r.URL.Path)
 }
