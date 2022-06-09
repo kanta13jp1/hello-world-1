@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/mux"
 )
 
@@ -25,14 +27,37 @@ var (
 )
 
 type User struct {
+	ID        string `json:"id"`
 	Firstname string `json:"firstname"`
 	Lastname  string `json:"lastname"`
 	Age       int    `json:"age"`
 }
 
+// albums slice to seed record album data.
+var users = []User{
+	{ID: "1", Firstname: "雄人", Lastname: "寺内", Age: 20},
+	{ID: "2", Firstname: "鷹哉", Lastname: "清水", Age: 20},
+	{ID: "3", Firstname: "", Lastname: "本田", Age: 20},
+}
+
 type Post struct {
 	Id    int    `json:"id"`
 	Title string `json:"title"`
+}
+
+// album represents data about a record album.
+type album struct {
+	ID     string  `json:"id"`
+	Title  string  `json:"title"`
+	Artist string  `json:"artist"`
+	Price  float64 `json:"price"`
+}
+
+// albums slice to seed record album data.
+var albums = []album{
+	{ID: "1", Title: "Blue Train", Artist: "John Coltrane", Price: 56.99},
+	{ID: "2", Title: "Jeru", Artist: "Gerry Mulligan", Price: 17.99},
+	{ID: "3", Title: "Sarah Vaughan and Clifford Brown", Artist: "Sarah Vaughan", Price: 39.99},
 }
 
 func main() {
@@ -46,6 +71,12 @@ func main() {
 	if revision == "" {
 		revision = "???"
 	}
+
+	// router := gin.Default()
+	// router.GET("/albums", getAlbumsgin)
+	// router.GET("/users", getUsersgin)
+
+	// router.Run("localhost:8080")
 
 	// Prepare template for execution.
 	tmpl = template.Must(template.ParseFiles("index.html"))
@@ -78,6 +109,8 @@ func main() {
 	r.HandleFunc("/", helloRunHandler)
 
 	r.HandleFunc("/test", testRunHandler)
+	r.HandleFunc("/albums", getAlbums)
+	r.HandleFunc("/users", getUsers)
 
 	// Restrict the request handler to http/https.
 	r.HandleFunc("/secure", SecureHandler).Schemes("https")
@@ -149,4 +182,28 @@ func SecureHandler(w http.ResponseWriter, r *http.Request) {
 
 func InsecureHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "InsecureHandler, you've requested: %s\n", r.URL.Path)
+}
+
+// getAlbums responds with the list of all albums as JSON.
+func getAlbumsgin(c *gin.Context) {
+	c.IndentedJSON(http.StatusOK, albums)
+}
+
+// getAlbums responds with the list of all albums as JSON.
+func getUsersgin(c *gin.Context) {
+	c.IndentedJSON(http.StatusOK, users)
+}
+
+// getAlbums responds with the list of all albums as JSON.
+func getAlbums(w http.ResponseWriter, r *http.Request) {
+	e := json.NewEncoder(w)
+	e.SetIndent("", strings.Repeat(" ", 4))
+	e.Encode(albums)
+}
+
+// getAlbums responds with the list of all albums as JSON.
+func getUsers(w http.ResponseWriter, r *http.Request) {
+	e := json.NewEncoder(w)
+	e.SetIndent("", strings.Repeat(" ", 4))
+	e.Encode(users)
 }
