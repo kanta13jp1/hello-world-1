@@ -27,17 +27,19 @@ var (
 )
 
 type User struct {
-	ID        string `json:"id"`
-	Firstname string `json:"firstname"`
-	Lastname  string `json:"lastname"`
-	Age       int    `json:"age"`
+	ID            string `json:"id"`
+	Firstname     string `json:"firstname"`
+	Lastname      string `json:"lastname"`
+	Age           int    `json:"age"`
+	Payedvacation int    `json:"payedvacation"`
 }
 
 // albums slice to seed record album data.
 var users = []User{
-	{ID: "1", Firstname: "雄人", Lastname: "寺内", Age: 20},
-	{ID: "2", Firstname: "鷹哉", Lastname: "清水", Age: 20},
-	{ID: "3", Firstname: "", Lastname: "本田", Age: 20},
+	{ID: "1", Firstname: "雄人", Lastname: "寺内", Age: 20, Payedvacation: 10},
+	{ID: "2", Firstname: "鷹哉", Lastname: "清水", Age: 20, Payedvacation: 20},
+	{ID: "3", Firstname: "", Lastname: "本田", Age: 20, Payedvacation: 30},
+	{ID: "4", Firstname: "寛太", Lastname: "梅澤", Age: 20, Payedvacation: 40},
 }
 
 type Post struct {
