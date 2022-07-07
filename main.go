@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // templateData provides template parameters.
@@ -28,6 +32,7 @@ var (
 
 type User struct {
 	ID            string `json:"id"`
+	Email         string `json:"email"`
 	Firstname     string `json:"firstname"`
 	Lastname      string `json:"lastname"`
 	Age           int    `json:"age"`
@@ -36,10 +41,10 @@ type User struct {
 
 // albums slice to seed record album data.
 var users = []User{
-	{ID: "1", Firstname: "雄人", Lastname: "寺内", Age: 20, Payedvacation: 10},
-	{ID: "2", Firstname: "鷹哉", Lastname: "清水", Age: 20, Payedvacation: 20},
-	{ID: "3", Firstname: "", Lastname: "本田", Age: 20, Payedvacation: 30},
-	{ID: "4", Firstname: "寛太", Lastname: "梅澤", Age: 20, Payedvacation: 40},
+	{ID: "1", Email: "", Firstname: "雄人", Lastname: "寺内", Age: 20, Payedvacation: 10},
+	{ID: "2", Email: "", Firstname: "鷹哉", Lastname: "清水", Age: 20, Payedvacation: 20},
+	{ID: "3", Email: "", Firstname: "", Lastname: "本田", Age: 20, Payedvacation: 30},
+	{ID: "4", Email: "", Firstname: "寛太", Lastname: "梅澤", Age: 20, Payedvacation: 40},
 }
 
 type Post struct {
@@ -62,7 +67,73 @@ var albums = []album{
 	{ID: "3", Title: "Sarah Vaughan and Clifford Brown", Artist: "Sarah Vaughan", Price: 39.99},
 }
 
+func GetDatabase() (*sql.DB, error) {
+	db, err := sql.Open("mysql", os.Getenv("DSN"))
+	return db, err
+}
+
+// .envを呼び出します。
+func loadEnv() {
+	// ここで.envファイル全体を読み込みます。
+	// この読み込み処理がないと、個々の環境変数が取得出来ません。
+	// 読み込めなかったら err にエラーが入ります。
+	err := godotenv.Load(".env")
+
+	// もし err がnilではないなら、"読み込み出来ませんでした"が出力されます。
+	if err != nil {
+		fmt.Printf("読み込み出来ませんでした: %v", err)
+	}
+
+	// .envの DSNを取得して、messageに代入します。
+	message := os.Getenv("DSN")
+
+	fmt.Println(message)
+}
+
+// getAllUsers queries for users.
+func getAllUsers(db *sql.DB) ([]User, error) {
+	// An users slice to hold data from returned rows.
+	var users []User
+
+	rows, err := db.Query("SELECT * FROM users")
+	if err != nil {
+		return nil, fmt.Errorf("getAllUsers: %v", err)
+	}
+	defer rows.Close()
+	// Loop through rows, using Scan to assign column data to struct fields.
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(&user.ID, &user.Email, &user.Firstname, &user.Lastname, &user.Age, &user.Payedvacation); err != nil {
+			return nil, fmt.Errorf("getAllUsers: %v", err)
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("getAllUsers: %v", err)
+	}
+	return users, nil
+}
+
 func main() {
+	//func loadEnvを呼び出します。
+	loadEnv()
+
+	print(os.Getenv("DSN"))
+	db, err := GetDatabase()
+	if err != nil {
+		panic(err)
+	}
+	if err := db.Ping(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Successfully connected to PlanetScale!")
+
+	users, err := getAllUsers(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Users found: %v\n", users)
+
 	// Initialize template parameters.
 	service := os.Getenv("K_SERVICE")
 	if service == "" {
@@ -88,11 +159,11 @@ func main() {
 	}
 
 	// posts.json を読み込む
-	postsJsonFile, error := os.Open("./assets/posts.json")
+	postsJsonFile, err := os.Open("./assets/posts.json")
 
 	// posts.json の読み込みに失敗した場合
-	if error != nil {
-		log.Fatal(error)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// defer で postsJsonFile を閉じる
@@ -159,7 +230,7 @@ func main() {
 
 	log.Print("Hello from Cloud Run! The container started successfully and is listening for HTTP requests on $PORT")
 	log.Printf("Listening on port %s", port)
-	err := http.ListenAndServe(":"+port, nil)
+	err = http.ListenAndServe(":"+port, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
