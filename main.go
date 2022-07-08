@@ -116,7 +116,7 @@ func getAllUsers(db *sql.DB) ([]User, error) {
 
 func main() {
 	//func loadEnvを呼び出します。
-	loadEnv()
+	//loadEnv()
 
 	print(os.Getenv("DSN"))
 	db, err := GetDatabase()
