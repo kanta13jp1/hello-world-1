@@ -40,12 +40,7 @@ type User struct {
 }
 
 // albums slice to seed record album data.
-var users = []User{
-	{ID: "1", Email: "", Firstname: "雄人", Lastname: "寺内", Age: 20, Payedvacation: 10},
-	{ID: "2", Email: "", Firstname: "鷹哉", Lastname: "清水", Age: 20, Payedvacation: 20},
-	{ID: "3", Email: "", Firstname: "", Lastname: "本田", Age: 20, Payedvacation: 30},
-	{ID: "4", Email: "", Firstname: "寛太", Lastname: "梅澤", Age: 20, Payedvacation: 40},
-}
+var users []User
 
 type Post struct {
 	Id    int    `json:"id"`
@@ -93,7 +88,7 @@ func loadEnv() {
 // getAllUsers queries for users.
 func getAllUsers(db *sql.DB) ([]User, error) {
 	// An users slice to hold data from returned rows.
-	var users []User
+	var localUsers []User
 
 	rows, err := db.Query("SELECT * FROM users")
 	if err != nil {
@@ -106,17 +101,17 @@ func getAllUsers(db *sql.DB) ([]User, error) {
 		if err := rows.Scan(&user.ID, &user.Email, &user.Firstname, &user.Lastname, &user.Age, &user.Payedvacation); err != nil {
 			return nil, fmt.Errorf("getAllUsers: %v", err)
 		}
-		users = append(users, user)
+		localUsers = append(localUsers, user)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("getAllUsers: %v", err)
 	}
-	return users, nil
+	return localUsers, nil
 }
 
 func main() {
 	//func loadEnvを呼び出します。
-	//loadEnv()
+	// loadEnv()
 
 	print(os.Getenv("DSN"))
 	db, err := GetDatabase()
@@ -184,6 +179,7 @@ func main() {
 	r.HandleFunc("/test", testRunHandler)
 	r.HandleFunc("/albums", getAlbums)
 	r.HandleFunc("/users", getUsers)
+	r.HandleFunc("/deleteUser", deleteUser)
 
 	// Restrict the request handler to http/https.
 	r.HandleFunc("/secure", SecureHandler).Schemes("https")
@@ -276,6 +272,60 @@ func getAlbums(w http.ResponseWriter, r *http.Request) {
 
 // getAlbums responds with the list of all albums as JSON.
 func getUsers(w http.ResponseWriter, r *http.Request) {
+	db, err := GetDatabase()
+	if err != nil {
+		panic(err)
+	}
+	if err := db.Ping(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Successfully connected to PlanetScale!")
+
+	users, err := getAllUsers(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Users found: %v\n", users)
+	e := json.NewEncoder(w)
+	e.SetIndent("", strings.Repeat(" ", 4))
+	e.Encode(users)
+}
+
+func deleteUser(w http.ResponseWriter, r *http.Request) {
+	db, err := GetDatabase()
+	if err != nil {
+		panic(err)
+	}
+	if err := db.Ping(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Successfully connected to PlanetScale!")
+
+	defer db.Close()
+
+	up, err := db.Prepare("DELETE FROM users WHERE id=?")
+
+	if err != nil {
+		fmt.Println("データベース接続失敗")
+		panic(err.Error())
+	} else {
+		fmt.Println("データベース接続成功")
+	}
+
+	defer db.Close()
+
+	result, err := up.Exec(9)
+	rowsAffect, err := result.RowsAffected()
+
+	if err != nil {
+		panic(err.Error())
+	}
+	fmt.Println(rowsAffect)
+	users, err := getAllUsers(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Users found: %v\n", users)
 	e := json.NewEncoder(w)
 	e.SetIndent("", strings.Repeat(" ", 4))
 	e.Encode(users)
