@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -87,6 +88,7 @@ func loadEnv() {
 
 // getAllUsers queries for users.
 func getAllUsers(db *sql.DB) ([]User, error) {
+	fmt.Println("getAllUsers start")
 	// An users slice to hold data from returned rows.
 	var localUsers []User
 
@@ -106,7 +108,36 @@ func getAllUsers(db *sql.DB) ([]User, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("getAllUsers: %v", err)
 	}
+	fmt.Println("getAllUsers end")
 	return localUsers, nil
+}
+
+func getUserImpl(db *sql.DB, id int) (User, error) {
+	var user User
+	fmt.Println("getUserByID start")
+
+	err := db.QueryRow("SELECT * FROM users WHERE id=?", id).
+		Scan(&user.ID, &user.Email, &user.Firstname, &user.Lastname, &user.Age, &user.Payedvacation)
+	if err != nil {
+		return user, fmt.Errorf("getUserByID: %v", err)
+	}
+	fmt.Println("getUserByID end")
+	return user, nil
+}
+
+func addUserImpl(db *sql.DB, user User) (int64, error) {
+	result, err := db.Exec("INSERT INTO users (id, email, first_name, last_name, age, payedvacation) VALUES (?, ?, ?, ?, ?, ?)", 0, user.Email, user.Firstname, user.Lastname, user.Age, user.Payedvacation)
+	if err != nil {
+		return 0, fmt.Errorf("addUser: %v", err)
+	}
+
+	// Get the new album's generated ID for the client.
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("addUser: %v", err)
+	}
+	// Return the new album's ID.
+	return id, nil
 }
 
 func main() {
@@ -121,7 +152,7 @@ func main() {
 	if err := db.Ping(); err != nil {
 		panic(err)
 	}
-	fmt.Println("Successfully connected to PlanetScale!")
+	fmt.Println("Successfully connected to PlanetScale! main")
 
 	users, err := getAllUsers(db)
 	if err != nil {
@@ -179,6 +210,8 @@ func main() {
 	r.HandleFunc("/test", testRunHandler)
 	r.HandleFunc("/albums", getAlbums)
 	r.HandleFunc("/users", getUsers)
+	r.HandleFunc("/user", getUser)
+	r.HandleFunc("/addUser", addUser)
 	r.HandleFunc("/deleteUser", deleteUser)
 
 	// Restrict the request handler to http/https.
@@ -230,6 +263,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("main end")
 }
 
 // helloRunHandler responds to requests by rendering an HTML page.
@@ -279,7 +313,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	if err := db.Ping(); err != nil {
 		panic(err)
 	}
-	fmt.Println("Successfully connected to PlanetScale!")
+	fmt.Println("Successfully connected to PlanetScale! getUsers")
 
 	users, err := getAllUsers(db)
 	if err != nil {
@@ -299,8 +333,16 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 	if err := db.Ping(); err != nil {
 		panic(err)
 	}
-	fmt.Println("Successfully connected to PlanetScale!")
-
+	fmt.Println("Successfully connected to PlanetScale! deleteUser")
+	fmt.Println("GET params were:", r.URL.Query())
+	fmt.Println(w, "%s %s %s\n", r.Method, r.URL, r.Proto)
+	v := r.URL.Query()
+	if v == nil {
+		return
+	}
+	for key, vs := range v {
+		fmt.Println(w, "%s = %s\n", key, vs[0])
+	}
 	defer db.Close()
 
 	up, err := db.Prepare("DELETE FROM users WHERE id=?")
@@ -314,13 +356,76 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 
 	defer db.Close()
 
-	result, err := up.Exec(9)
-	rowsAffect, err := result.RowsAffected()
+	id := r.FormValue("id")
 
+	fmt.Println(id)
+
+	result, err := up.Exec(id)
+	if err != nil {
+		panic(err.Error())
+	}
+	rowsAffect, err := result.RowsAffected()
 	if err != nil {
 		panic(err.Error())
 	}
 	fmt.Println(rowsAffect)
+	users, err := getAllUsers(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Users found: %v\n", users)
+	e := json.NewEncoder(w)
+	e.SetIndent("", strings.Repeat(" ", 4))
+	e.Encode(users)
+}
+
+func getUser(w http.ResponseWriter, r *http.Request) {
+	db, err := GetDatabase()
+	if err != nil {
+		panic(err)
+	}
+	if err := db.Ping(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Successfully connected to PlanetScale! addUser")
+
+	id, _ := strconv.Atoi(r.FormValue("id"))
+
+	user, err := getUserImpl(db, id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("get User: %v\n", user)
+
+	e := json.NewEncoder(w)
+	e.SetIndent("", strings.Repeat(" ", 4))
+	e.Encode(user)
+}
+
+func addUser(w http.ResponseWriter, r *http.Request) {
+	db, err := GetDatabase()
+	if err != nil {
+		panic(err)
+	}
+	if err := db.Ping(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Successfully connected to PlanetScale! addUser")
+
+	testUser := User{
+		Email:         "test@test.com",
+		Firstname:     "John",
+		Lastname:      "Doe",
+		Age:           25,
+		Payedvacation: 10,
+	}
+
+	id, err := addUserImpl(db, testUser)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("User added id: %v\n", id)
+
 	users, err := getAllUsers(db)
 	if err != nil {
 		log.Fatal(err)
