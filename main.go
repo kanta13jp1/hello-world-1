@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 
@@ -32,17 +31,13 @@ var (
 )
 
 type User struct {
-	ID            string `json:"id"`
+	Id            int    `json:"id"`
 	Email         string `json:"email"`
 	Firstname     string `json:"firstname"`
 	Lastname      string `json:"lastname"`
 	Age           int    `json:"age"`
 	Payedvacation int    `json:"payedvacation"`
 }
-
-// albums slice to seed record album data.
-var users []User
-
 type Post struct {
 	Id    int    `json:"id"`
 	Title string `json:"title"`
@@ -100,7 +95,7 @@ func getAllUsers(db *sql.DB) ([]User, error) {
 	// Loop through rows, using Scan to assign column data to struct fields.
 	for rows.Next() {
 		var user User
-		if err := rows.Scan(&user.ID, &user.Email, &user.Firstname, &user.Lastname, &user.Age, &user.Payedvacation); err != nil {
+		if err := rows.Scan(&user.Id, &user.Email, &user.Firstname, &user.Lastname, &user.Age, &user.Payedvacation); err != nil {
 			return nil, fmt.Errorf("getAllUsers: %v", err)
 		}
 		localUsers = append(localUsers, user)
@@ -117,7 +112,7 @@ func getUserImpl(db *sql.DB, id int) (User, error) {
 	fmt.Println("getUserByID start")
 
 	err := db.QueryRow("SELECT * FROM users WHERE id=?", id).
-		Scan(&user.ID, &user.Email, &user.Firstname, &user.Lastname, &user.Age, &user.Payedvacation)
+		Scan(&user.Id, &user.Email, &user.Firstname, &user.Lastname, &user.Age, &user.Payedvacation)
 	if err != nil {
 		return user, fmt.Errorf("getUserByID: %v", err)
 	}
@@ -125,19 +120,28 @@ func getUserImpl(db *sql.DB, id int) (User, error) {
 	return user, nil
 }
 
-func addUserImpl(db *sql.DB, user User) (int64, error) {
+func addUserImpl(db *sql.DB, user User) (User, error) {
 	result, err := db.Exec("INSERT INTO users (id, email, first_name, last_name, age, payedvacation) VALUES (?, ?, ?, ?, ?, ?)", 0, user.Email, user.Firstname, user.Lastname, user.Age, user.Payedvacation)
 	if err != nil {
-		return 0, fmt.Errorf("addUser: %v", err)
+		return user, fmt.Errorf("addUserImpl: %v", err)
 	}
 
 	// Get the new album's generated ID for the client.
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("addUser: %v", err)
+		return user, fmt.Errorf("addUserImpl: %v", err)
 	}
+	user.Id = int(id)
 	// Return the new album's ID.
-	return id, nil
+	return user, nil
+}
+
+func updateUserImpl(db *sql.DB, user User) error {
+	_, err := db.Exec("UPDATE users SET email = ?, first_name = ?, last_name = ?, age = ?, payedvacation = ? WHERE id=?", user.Email, user.Firstname, user.Lastname, user.Age, user.Payedvacation, user.Id)
+	if err != nil {
+		return fmt.Errorf("updateUserImpl: %v", err)
+	}
+	return nil
 }
 
 func main() {
@@ -211,7 +215,8 @@ func main() {
 	r.HandleFunc("/albums", getAlbums)
 	r.HandleFunc("/users", getUsers)
 	r.HandleFunc("/user", getUser)
-	r.HandleFunc("/addUser", addUser)
+	r.HandleFunc("/addUser", addUser).Methods("POST")
+	r.HandleFunc("/updateUser", updateUser).Methods("PUT")
 	r.HandleFunc("/deleteUser", deleteUser)
 
 	// Restrict the request handler to http/https.
@@ -285,16 +290,6 @@ func SecureHandler(w http.ResponseWriter, r *http.Request) {
 
 func InsecureHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "InsecureHandler, you've requested: %s\n", r.URL.Path)
-}
-
-// getAlbums responds with the list of all albums as JSON.
-func getAlbumsgin(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, albums)
-}
-
-// getAlbums responds with the list of all albums as JSON.
-func getUsersgin(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, users)
 }
 
 // getAlbums responds with the list of all albums as JSON.
@@ -387,7 +382,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	if err := db.Ping(); err != nil {
 		panic(err)
 	}
-	fmt.Println("Successfully connected to PlanetScale! addUser")
+	fmt.Println("Successfully connected to PlanetScale! getUser")
 
 	id, _ := strconv.Atoi(r.FormValue("id"))
 
@@ -402,6 +397,9 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	e.Encode(user)
 }
 
+// addUser handles a request to add a new user. It decodes a JSON object from the request
+// body into a User struct and passes it to addUserImpl function to add it to the database.
+// It also retrieves all users from the database and encodes them as a JSON response.
 func addUser(w http.ResponseWriter, r *http.Request) {
 	db, err := GetDatabase()
 	if err != nil {
@@ -412,19 +410,47 @@ func addUser(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println("Successfully connected to PlanetScale! addUser")
 
-	testUser := User{
-		Email:         "test@test.com",
-		Firstname:     "John",
-		Lastname:      "Doe",
-		Age:           25,
-		Payedvacation: 10,
+	var newUser User
+	err = json.NewDecoder(r.Body).Decode(&newUser)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	id, err := addUserImpl(db, testUser)
+	user, err := addUserImpl(db, newUser)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("User added id: %v\n", id)
+	fmt.Printf("User added : %v\n", user)
+	e := json.NewEncoder(w)
+	e.SetIndent("", strings.Repeat(" ", 4))
+	e.Encode(user)
+}
+
+func updateUser(w http.ResponseWriter, r *http.Request) {
+	db, err := GetDatabase()
+	if err != nil {
+		panic(err)
+	}
+	if err := db.Ping(); err != nil {
+		panic(err)
+	}
+	fmt.Println("Successfully connected to PlanetScale! addUser")
+
+	id, _ := strconv.Atoi(r.FormValue("id"))
+
+	fmt.Println(id)
+
+	testUser := User{
+		Id:            id,
+		Email:         "test@test.com",
+		Firstname:     "JohnUpdate",
+		Lastname:      "DoeUpdate",
+		Age:           20,
+		Payedvacation: 10,
+	}
+
+	updateUserImpl(db, testUser)
 
 	users, err := getAllUsers(db)
 	if err != nil {
